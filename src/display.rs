@@ -7,15 +7,14 @@ use embedded_graphics::{
 };
 use esp_idf_svc::hal::{
     delay::Ets,
-    gpio::{AnyInputPin, Gpio16, Gpio23, Gpio4, Output, PinDriver},
-    prelude::Peripherals,
+    gpio::{AnyInputPin, Gpio16, Gpio18, Gpio19, Gpio23, Gpio4, Gpio5, Output, PinDriver},
     spi::{
         config::{Config as DeviceConfig, DriverConfig},
         Dma, SpiDeviceDriver, SpiDriver,
     },
     units::Hertz,
 };
-use mipidsi::{interface::SpiInterface, models::ST7789, Builder, Display};
+use mipidsi::{interface::SpiInterface, models::ST7789, options::Orientation, Builder, Display};
 
 pub struct EspDisplay<'a, 'b> {
     display: DisplayType<'a, 'b>,
@@ -28,24 +27,27 @@ type DisplayType<'a, 'b> = Display<
     ST7789,
     PinDriver<'a, Gpio23, esp_idf_svc::hal::gpio::Output>,
 >;
-pub const ESP_DISPLAY_WIDTH: u16 = 135;
-pub const ESP_DISPLAY_HEIGHT: u16 = 240;
+pub const ESP_DISPLAY_WIDTH: u16 = 240;
+pub const ESP_DISPLAY_HEIGHT: u16 = 135;
 pub const ESP_DISPLAY_BUFFER_SIZE: usize =
     (ESP_DISPLAY_WIDTH as usize) * (ESP_DISPLAY_HEIGHT as usize);
 
 impl<'a, 'b> EspDisplay<'a, 'b> {
-    pub fn new() -> Self {
-        let peripherals = Peripherals::take().unwrap();
-        let pins = peripherals.pins;
+    pub fn new(rst_pin: Gpio23,
+                dc_pin: Gpio16,
+                spi2: esp_idf_svc::hal::spi::SPI2,
+                sclk_pin: Gpio18,
+                sdo_pin: Gpio19,
+                cs_pin: Gpio5,
+                backlight_pin: Gpio4) -> Self {
+        let rst = PinDriver::output(rst_pin).unwrap();
 
-        let rst = PinDriver::output(pins.gpio23).unwrap();
-
-        let dc = PinDriver::output(pins.gpio16).unwrap();
-        let driver_cfg = DriverConfig::new().dma(Dma::Auto(4096));
+        let dc = PinDriver::output(dc_pin).unwrap();
+        let driver_cfg = DriverConfig::new().dma(Dma::Auto(65536));
         let spi = SpiDriver::new(
-            peripherals.spi2,
-            pins.gpio18,
-            pins.gpio19,
+            spi2,
+            sclk_pin,
+            sdo_pin,
             None::<AnyInputPin>,
             &driver_cfg,
         )
@@ -53,8 +55,8 @@ impl<'a, 'b> EspDisplay<'a, 'b> {
 
         let dev_cfg = DeviceConfig::new()
             .queue_size(1)
-            .baudrate(Hertz(32_500_000));
-        let spi_device = SpiDeviceDriver::new(spi, Some(pins.gpio5), &dev_cfg).unwrap();
+            .baudrate(Hertz(30*1024*1024));
+        let spi_device = SpiDeviceDriver::new(spi, Some(cs_pin), &dev_cfg).unwrap();
 
         let boxed_scratch_buffer = Box::new([0u8; 512]);
         let scratch_buffer = Box::leak(boxed_scratch_buffer);
@@ -70,13 +72,14 @@ impl<'a, 'b> EspDisplay<'a, 'b> {
             // That's why we need to set the display offset to 52, 40.
             .display_offset(52, 40)
             .invert_colors(mipidsi::options::ColorInversion::Inverted)
+            .orientation(Orientation::new().rotate(mipidsi::options::Rotation::Deg90))
             .init(&mut delay)
             .unwrap();
 
         let boxed_pixels = Box::new([0u16; ESP_DISPLAY_BUFFER_SIZE]);
         let pixels = Box::leak(boxed_pixels);
 
-        let mut backlight = PinDriver::output(pins.gpio4).unwrap();
+        let mut backlight = PinDriver::output(backlight_pin).unwrap();
         backlight.set_high().unwrap();
 
         EspDisplay {
@@ -87,20 +90,8 @@ impl<'a, 'b> EspDisplay<'a, 'b> {
     }
 
     #[allow(dead_code)]
-    pub fn get_display(&mut self) -> &mut DisplayType<'a, 'b> {
-        &mut self.display
-    }
-
-    #[allow(dead_code)]
     pub fn toggle_backlight(&mut self) {
         self.backlight.toggle().unwrap();
-    }
-
-    pub fn hello(&mut self) {
-        let style = MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE);
-        Text::new("Hello, World!", Point::new(10, 10), style)
-            .draw(&mut self.display)
-            .unwrap();
     }
 
     pub fn fill(&mut self, color: Option<Rgb565>) {
@@ -116,6 +107,19 @@ impl<'a, 'b> EspDisplay<'a, 'b> {
                     Rgb565::new((u >> 11) as u8, ((u >> 5) & 0x3F) as u8, (u & 0x1F) as u8)
                 }),
             )
+            .unwrap();
+    }
+
+    pub fn text(
+        &mut self,
+        text: &str,
+        x: i32,
+        y: i32,
+        color: Rgb565,
+    ) {
+        let style = MonoTextStyle::new(&FONT_6X10, color);
+        Text::new(text, Point::new(x, y), style)
+            .draw(&mut self.display)
             .unwrap();
     }
 

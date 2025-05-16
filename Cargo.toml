@@ -27,6 +27,7 @@ log = "0.4"
 esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
 mipidsi = "0.9.0"
 embedded-graphics = "0.8.1"
+button-driver = { version = "0.2.3", features = ["std", "embedded_hal"] }
 
 [build-dependencies]
 embuild = "0.33"
