@@ -1,3 +1,5 @@
+use std::sync::Mutex;
+
 use embedded_graphics::{
     mono_font::{ascii::FONT_6X10, MonoTextStyle},
     pixelcolor::Rgb565,
@@ -31,6 +33,8 @@ pub const ESP_DISPLAY_WIDTH: u16 = 240;
 pub const ESP_DISPLAY_HEIGHT: u16 = 135;
 pub const ESP_DISPLAY_BUFFER_SIZE: usize =
     (ESP_DISPLAY_WIDTH as usize) * (ESP_DISPLAY_HEIGHT as usize);
+pub const FONT_COLOR: Rgb565 = Rgb565::GREEN;
+pub const BACKGROUND_COLOR: Rgb565 = Rgb565::BLACK;
 
 impl<'a, 'b> EspDisplay<'a, 'b> {
     pub fn new(rst_pin: Gpio23,
@@ -39,7 +43,7 @@ impl<'a, 'b> EspDisplay<'a, 'b> {
                 sclk_pin: Gpio18,
                 sdo_pin: Gpio19,
                 cs_pin: Gpio5,
-                backlight_pin: Gpio4) -> Self {
+                backlight_pin: Gpio4) -> Box<Mutex<Self>> {
         let rst = PinDriver::output(rst_pin).unwrap();
 
         let dc = PinDriver::output(dc_pin).unwrap();
@@ -82,16 +86,20 @@ impl<'a, 'b> EspDisplay<'a, 'b> {
         let mut backlight = PinDriver::output(backlight_pin).unwrap();
         backlight.set_high().unwrap();
 
-        EspDisplay {
+        Box::new(Mutex::new(EspDisplay {
             display,
             backlight,
             pixels,
-        }
+        }))
     }
 
     #[allow(dead_code)]
     pub fn toggle_backlight(&mut self) {
         self.backlight.toggle().unwrap();
+    }
+
+    pub fn clear(&mut self) {
+        self.fill(Some(BACKGROUND_COLOR));
     }
 
     pub fn fill(&mut self, color: Option<Rgb565>) {
@@ -114,10 +122,9 @@ impl<'a, 'b> EspDisplay<'a, 'b> {
         &mut self,
         text: &str,
         x: i32,
-        y: i32,
-        color: Rgb565,
+        y: i32
     ) {
-        let style = MonoTextStyle::new(&FONT_6X10, color);
+        let style = MonoTextStyle::new(&FONT_6X10, FONT_COLOR);
         Text::new(text, Point::new(x, y), style)
             .draw(&mut self.display)
             .unwrap();
