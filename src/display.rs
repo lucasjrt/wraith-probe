@@ -1,9 +1,9 @@
-use std::sync::Mutex;
-
 use embedded_graphics::{
-    mono_font::{ascii::FONT_6X10, MonoTextStyle},
+    draw_target::DrawTarget,
+    mono_font::{ascii::FONT_8X13, MonoTextStyle},
     pixelcolor::Rgb565,
-    prelude::{IntoStorage, Point, RgbColor},
+    prelude::{Point, PointsIter, RgbColor, Size},
+    primitives::Rectangle,
     text::Text,
     Drawable,
 };
@@ -11,23 +11,28 @@ use esp_idf_svc::hal::{
     delay::Ets,
     gpio::{AnyInputPin, Gpio16, Gpio18, Gpio19, Gpio23, Gpio4, Gpio5, Output, PinDriver},
     spi::{
-        config::{Config as DeviceConfig, DriverConfig},
+        config::{Config as DeviceConfig, DriverConfig, Duplex, MODE_0},
         Dma, SpiDeviceDriver, SpiDriver,
     },
     units::Hertz,
 };
 use mipidsi::{interface::SpiInterface, models::ST7789, options::Orientation, Builder, Display};
 
-pub struct EspDisplay<'a, 'b> {
-    display: DisplayType<'a, 'b>,
-    backlight: PinDriver<'a, Gpio4, Output>,
-    pixels: &'a mut [u16; ESP_DISPLAY_BUFFER_SIZE],
+#[allow(dead_code)]
+pub struct EspDisplay {
+    display: DisplayType,
+    backlight: PinDriver<'static, Gpio4, Output>,
+    pixels: Box<[u16; ESP_DISPLAY_BUFFER_SIZE]>,
 }
 
-type DisplayType<'a, 'b> = Display<
-    SpiInterface<'a, SpiDeviceDriver<'b, SpiDriver<'b>>, PinDriver<'a, Gpio16, Output>>,
+type DisplayType = Display<
+    SpiInterface<
+        'static,
+        SpiDeviceDriver<'static, SpiDriver<'static>>,
+        PinDriver<'static, Gpio16, Output>,
+    >,
     ST7789,
-    PinDriver<'a, Gpio23, esp_idf_svc::hal::gpio::Output>,
+    PinDriver<'static, Gpio23, esp_idf_svc::hal::gpio::Output>,
 >;
 pub const ESP_DISPLAY_WIDTH: u16 = 240;
 pub const ESP_DISPLAY_HEIGHT: u16 = 135;
@@ -36,35 +41,34 @@ pub const ESP_DISPLAY_BUFFER_SIZE: usize =
 pub const FONT_COLOR: Rgb565 = Rgb565::GREEN;
 pub const BACKGROUND_COLOR: Rgb565 = Rgb565::BLACK;
 
-impl<'a, 'b> EspDisplay<'a, 'b> {
-    pub fn new(rst_pin: Gpio23,
-                dc_pin: Gpio16,
-                spi2: esp_idf_svc::hal::spi::SPI2,
-                sclk_pin: Gpio18,
-                sdo_pin: Gpio19,
-                cs_pin: Gpio5,
-                backlight_pin: Gpio4) -> Box<Mutex<Self>> {
+impl EspDisplay {
+    pub fn new(
+        rst_pin: Gpio23,
+        dc_pin: Gpio16,
+        spi2: esp_idf_svc::hal::spi::SPI2,
+        sclk_pin: Gpio18,
+        sdo_pin: Gpio19,
+        cs_pin: Gpio5,
+        backlight_pin: Gpio4,
+    ) -> Self {
+        // ) {
         let rst = PinDriver::output(rst_pin).unwrap();
-
         let dc = PinDriver::output(dc_pin).unwrap();
-        let driver_cfg = DriverConfig::new().dma(Dma::Auto(65536));
-        let spi = SpiDriver::new(
-            spi2,
-            sclk_pin,
-            sdo_pin,
-            None::<AnyInputPin>,
-            &driver_cfg,
-        )
-        .unwrap();
+
+        let driver_cfg = DriverConfig::new().dma(Dma::Auto(65_536));
+        let spi =
+            SpiDriver::new(spi2, sclk_pin, sdo_pin, None::<AnyInputPin>, &driver_cfg).unwrap();
 
         let dev_cfg = DeviceConfig::new()
-            .queue_size(1)
-            .baudrate(Hertz(30*1024*1024));
+            .queue_size(10)
+            .baudrate(Hertz(40_000_000))
+            .duplex(Duplex::Half)
+            .data_mode(MODE_0);
         let spi_device = SpiDeviceDriver::new(spi, Some(cs_pin), &dev_cfg).unwrap();
 
-        let boxed_scratch_buffer = Box::new([0u8; 512]);
+        let boxed_scratch_buffer = Box::new([0u8; 64 * 1024]);
         let scratch_buffer = Box::leak(boxed_scratch_buffer);
-        let di = SpiInterface::new(spi_device, dc, &mut *scratch_buffer);
+        let di = SpiInterface::new(spi_device, dc, scratch_buffer);
 
         let mut delay = Ets;
         let display = Builder::new(ST7789, di)
@@ -80,17 +84,16 @@ impl<'a, 'b> EspDisplay<'a, 'b> {
             .init(&mut delay)
             .unwrap();
 
-        let boxed_pixels = Box::new([0u16; ESP_DISPLAY_BUFFER_SIZE]);
-        let pixels = Box::leak(boxed_pixels);
+        let pixels = Box::new([0u16; ESP_DISPLAY_BUFFER_SIZE]);
 
         let mut backlight = PinDriver::output(backlight_pin).unwrap();
         backlight.set_high().unwrap();
 
-        Box::new(Mutex::new(EspDisplay {
+        Self {
             display,
             backlight,
             pixels,
-        }))
+        }
     }
 
     #[allow(dead_code)]
@@ -99,32 +102,28 @@ impl<'a, 'b> EspDisplay<'a, 'b> {
     }
 
     pub fn clear(&mut self) {
-        self.fill(Some(BACKGROUND_COLOR));
-    }
-
-    pub fn fill(&mut self, color: Option<Rgb565>) {
-        let color = color.unwrap_or(Rgb565::BLACK);
-        self.pixels.fill(color.into_storage());
+        let area = Rectangle {
+            top_left: Point::new(0, 0),
+            size: Size::new(ESP_DISPLAY_WIDTH as u32, ESP_DISPLAY_HEIGHT as u32),
+        };
         self.display
-            .set_pixels(
-                0,
-                0,
-                ESP_DISPLAY_WIDTH - 1,
-                ESP_DISPLAY_HEIGHT - 1,
-                self.pixels.iter().copied().map(|u: u16| {
-                    Rgb565::new((u >> 11) as u8, ((u >> 5) & 0x3F) as u8, (u & 0x1F) as u8)
-                }),
-            )
+            .fill_contiguous(&area, area.points().map(|_| BACKGROUND_COLOR))
             .unwrap();
     }
 
-    pub fn text(
-        &mut self,
-        text: &str,
-        x: i32,
-        y: i32
-    ) {
-        let style = MonoTextStyle::new(&FONT_6X10, FONT_COLOR);
+    pub fn fill_rect(&mut self, x: i32, y: i32, w: i32, h: i32, color: Option<Rgb565>) {
+        let fill_color = color.unwrap_or(BACKGROUND_COLOR);
+        let area = Rectangle {
+            top_left: Point::new(x, y),
+            size: Size::new(w as u32, h as u32),
+        };
+        self.display
+            .fill_contiguous(&area, area.points().map(|_| fill_color))
+            .unwrap();
+    }
+
+    pub fn text(&mut self, text: &str, x: i32, y: i32) {
+        let style = MonoTextStyle::new(&FONT_8X13, FONT_COLOR);
         Text::new(text, Point::new(x, y), style)
             .draw(&mut self.display)
             .unwrap();

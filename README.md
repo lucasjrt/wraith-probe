@@ -18,6 +18,7 @@ The wraith-probe is intended to be flashed in a ttgo t-display board, and the id
 
 ## Bluetooth features
 - Sniffer
+- Jammer
 - ...
 
 ## Controls
@@ -26,7 +27,7 @@ The controls below are just an idea and probably will change.
 
 | Gesture                 | Button A      | Button B      | A + B together   |
 | ----------------------- | ------------- | ------------- | ---------------- |
-| **Single click**        | Next item     | Previous Item | TODO             |
+| **Single click**        | Next item     | Previous Item | -                |
 | **Double click**        | -             | -             | Toggle Wi-Fi/BLE |
 | **Triple click**        | -             | -             | -                |
 | **Long press**          | Select/Enter  | Cancel/Back   | Open settings    |
