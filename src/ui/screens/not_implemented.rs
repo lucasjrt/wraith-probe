@@ -2,22 +2,22 @@ use crate::{
     context::Context, display::EspDisplay, events::AppEvent, menu::Menu, ui::router::RouterCommand,
 };
 
-pub struct NotImplementedScreen;
+pub struct NotImplementedScreen(&'static str);
 
 impl NotImplementedScreen {
-    pub fn new() -> Self {
-        NotImplementedScreen
+    pub fn new(title: &'static str) -> Self {
+        NotImplementedScreen(title)
     }
 }
 
 impl Menu for NotImplementedScreen {
     fn title(&self) -> &str {
-        "Not Implemented"
+        self.0
     }
 
     fn render(&self, display: &mut EspDisplay) {
         display.clear();
-        display.text("=== Not Implemented ===", 10, 10);
+        display.text(&format!("=== {} ===", self.title()), 10, 10);
         display.text("This feature is not yet\nimplemented.", 10, 30);
     }
 

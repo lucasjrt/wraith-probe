@@ -76,19 +76,19 @@ impl Menu for MainMenu<'_> {
                 "Wi-Fi" => {
                     ctx.set_dirty(Dirty::Full);
                     return Some(RouterCommand::NavigateTo(Box::new(
-                        NotImplementedScreen::new(),
+                        NotImplementedScreen::new("Wi-Fi"),
                     )));
                 }
                 "Bluetooth" => {
                     ctx.set_dirty(Dirty::Full);
                     return Some(RouterCommand::NavigateTo(Box::new(
-                        NotImplementedScreen::new(),
+                        NotImplementedScreen::new("Bluetooth"),
                     )));
                 }
                 "Settings" => {
                     ctx.set_dirty(Dirty::Full);
                     return Some(RouterCommand::NavigateTo(Box::new(
-                        NotImplementedScreen::new(),
+                        NotImplementedScreen::new("Settings"),
                     )));
                 }
                 "About" => {
