@@ -148,7 +148,7 @@ impl DrawTarget for EspDisplay {
         I: IntoIterator<Item = embedded_graphics::Pixel<Self::Color>>,
     {
         for Pixel(coord, color) in pixels.into_iter() {
-            if let (x @ 0..=ESP_DISPLAY_WIDTH, y @ 0..=ESP_DISPLAY_HEIGHT) = coord.into() {
+            if let (x @ 0..ESP_DISPLAY_WIDTH, y @ 0..ESP_DISPLAY_HEIGHT) = coord.into() {
                 let index = (y * ESP_DISPLAY_WIDTH + x) as usize;
                 self.pixels[index] = color;
             }
