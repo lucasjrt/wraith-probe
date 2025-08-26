@@ -18,6 +18,7 @@ use ui::router::Router;
 
 use crate::{
     context::{Context, Dirty},
+    display::EspDisplay,
     ui::screens::main::MainMenu,
 };
 
@@ -42,14 +43,14 @@ fn main() -> Result<(), EspError> {
     let (app_tx, app_rx) = mpsc::channel::<AppEvent>();
 
     log::info!("Initializing display");
-    let mut display = display::EspDisplay::new(
-        pins.gpio23,
-        pins.gpio16,
+    let mut display = EspDisplay::new(
+        pins.gpio23.into(),
+        pins.gpio16.into(),
         peripherals.spi2,
-        pins.gpio18,
-        pins.gpio19,
-        pins.gpio5,
-        pins.gpio4,
+        pins.gpio18.into(),
+        pins.gpio19.into(),
+        pins.gpio5.into(),
+        pins.gpio4.into(),
     );
 
     display.enable_backlight();
@@ -144,6 +145,7 @@ fn main() -> Result<(), EspError> {
                 }
             }
             router.current_menu().render(&mut display);
+            display.flush();
             ctx.clear_dirty();
         }
 
