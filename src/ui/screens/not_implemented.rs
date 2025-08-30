@@ -1,16 +1,16 @@
-use crate::{display::EspDisplay, ui::screen::Screen};
+use crate::ui::screen::Screen;
 
-pub struct NotImplementedScreen(&'static str);
+pub struct NotImplementedScreen(String);
 
 impl NotImplementedScreen {
-    pub fn new(title: &'static str) -> Self {
+    pub fn new(title: String) -> Self {
         NotImplementedScreen(title)
     }
 }
 
 impl Screen for NotImplementedScreen {
     fn title(&self) -> &str {
-        self.0
+        &self.0
     }
 
     fn content(&self) -> &str {

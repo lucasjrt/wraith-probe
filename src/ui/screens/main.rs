@@ -69,29 +69,16 @@ impl Screen for MainMenu<'_> {
             AppEvent::UpPressed => self.navigate_up(),
             AppEvent::DownPressed => self.navigate_down(),
             AppEvent::SelectPressed => match self.items[self.selected] {
-                "Wi-Fi" => {
-                    ctx.set_dirty(Dirty::Full);
-                    return Some(RouterCommand::NavigateTo(Box::new(
-                        NotImplementedScreen::new("Wi-Fi"),
-                    )));
-                }
-                "Bluetooth" => {
-                    ctx.set_dirty(Dirty::Full);
-                    return Some(RouterCommand::NavigateTo(Box::new(
-                        NotImplementedScreen::new("Bluetooth"),
-                    )));
-                }
-                "Settings" => {
-                    ctx.set_dirty(Dirty::Full);
-                    return Some(RouterCommand::NavigateTo(Box::new(
-                        NotImplementedScreen::new("Settings"),
-                    )));
-                }
                 "About" => {
                     ctx.set_dirty(Dirty::Full);
                     return Some(RouterCommand::NavigateTo(Box::new(AboutMenu::new())));
                 }
-                _ => {}
+                text => {
+                    ctx.set_dirty(Dirty::Full);
+                    return Some(RouterCommand::NavigateTo(Box::new(
+                        NotImplementedScreen::new(String::from(text)),
+                    )));
+                }
             },
             _ => {
                 return None;
@@ -106,10 +93,6 @@ impl Screen for MainMenu<'_> {
     }
 
     fn menu(&self) -> Option<&dyn Menu> {
-        Some(self)
-    }
-
-    fn menu_mut(&mut self) -> Option<&mut dyn Menu> {
         Some(self)
     }
 }
