@@ -19,7 +19,10 @@ use ui::router::Router;
 use crate::{
     context::{Context, Dirty},
     display::EspDisplay,
-    ui::screens::main::MainMenu,
+    ui::{
+        screen::Screen,
+        screens::{booting::BootingScreen, main::MainMenu},
+    },
 };
 
 fn init_sys() {
@@ -57,12 +60,17 @@ fn main() -> Result<(), EspError> {
     display.clear();
     log::info!("Display initialized");
 
+    let mut booting_screen = BootingScreen::new();
+    booting_screen.log("Display initialized", &mut display);
+
+    booting_screen.log("Starting input handler", &mut display);
     log::info!("Starting input handler");
     let mut input = input::Input::new(select_button_pin, back_button_pin);
     thread::spawn(move || loop {
         input.run(app_tx.clone());
     });
     log::info!("Input handler started");
+    booting_screen.log("Input handler started", &mut display);
 
     // log::info!("Starting wifi agent");
     // display.text("Starting wifi agent", 10, 10);
@@ -84,7 +92,7 @@ fn main() -> Result<(), EspError> {
     // log::info!("Wifi agent started");
 
     log::info!("Initialization complete, starting ui");
-    display.text("Initialization complete", 10, 50, None, None);
+    booting_screen.log("Initialization complete", &mut display);
 
     let delay = Delay::new(1);
     delay.delay_ms(1000);
