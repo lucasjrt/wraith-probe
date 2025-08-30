@@ -35,12 +35,10 @@ type DisplayType = Display<
     ST7789,
     PinDriver<'static, AnyIOPin, esp_idf_svc::hal::gpio::Output>,
 >;
-pub const ESP_DISPLAY_WIDTH: i32 = 240;
-pub const ESP_DISPLAY_HEIGHT: i32 = 135;
+pub const ESP_DISPLAY_WIDTH: u32 = 240;
+pub const ESP_DISPLAY_HEIGHT: u32 = 135;
 pub const ESP_DISPLAY_BUFFER_SIZE: usize =
     (ESP_DISPLAY_WIDTH as usize) * (ESP_DISPLAY_HEIGHT as usize);
-pub const FONT_COLOR: Rgb565 = Rgb565::GREEN;
-pub const BACKGROUND_COLOR: Rgb565 = Rgb565::BLACK;
 
 pub struct Theme {
     pub primary: Rgb565,
@@ -99,10 +97,7 @@ impl EspDisplay {
             display,
             backlight,
             pixels,
-            theme: Theme {
-                primary: Rgb565::GREEN,
-                secondary: Rgb565::BLACK,
-            },
+            theme: Theme::new(Rgb565::GREEN, Rgb565::BLACK),
         }
     }
 
@@ -115,14 +110,14 @@ impl EspDisplay {
         self.fill_rect(
             0,
             0,
-            ESP_DISPLAY_WIDTH,
-            ESP_DISPLAY_HEIGHT,
-            Some(BACKGROUND_COLOR),
+            ESP_DISPLAY_WIDTH as i32,
+            ESP_DISPLAY_HEIGHT as i32,
+            Some(self.theme().secondary()),
         );
     }
 
     pub fn fill_rect(&mut self, x: i32, y: i32, w: i32, h: i32, color: Option<Rgb565>) {
-        let color = color.unwrap_or(BACKGROUND_COLOR);
+        let color = color.unwrap_or(self.theme().secondary());
         let area = Rectangle::new(Point::new(x, y), Size::new(w as u32, h as u32));
         self.draw_iter(area.points().map(|p| Pixel(p, color)))
             .unwrap();
@@ -146,7 +141,7 @@ impl EspDisplay {
         let mut x = x;
 
         if alignment == Alignment::Center && x < 0 {
-            x = ESP_DISPLAY_WIDTH / 2;
+            x = ESP_DISPLAY_WIDTH as i32 / 2;
         }
 
         Text::with_text_style(text, Point::new(x, y), font, style)
@@ -169,16 +164,16 @@ impl EspDisplay {
             .unwrap();
     }
 
-    pub fn font_height(&self) -> i32 {
+    pub fn font_height(&self) -> u32 {
         // TODO: Make this dynamic based on the font used
         13
     }
 
-    pub fn width(&self) -> i32 {
+    pub fn width(&self) -> u32 {
         ESP_DISPLAY_WIDTH
     }
 
-    pub fn height(&self) -> i32 {
+    pub fn height(&self) -> u32 {
         ESP_DISPLAY_HEIGHT
     }
 
@@ -199,14 +194,6 @@ impl Theme {
     pub fn secondary(&self) -> Rgb565 {
         self.secondary
     }
-
-    pub fn set_primary(&mut self, color: Rgb565) {
-        self.primary = color;
-    }
-
-    pub fn set_secondary(&mut self, color: Rgb565) {
-        self.secondary = color;
-    }
 }
 
 impl DrawTarget for EspDisplay {
@@ -217,9 +204,12 @@ impl DrawTarget for EspDisplay {
     where
         I: IntoIterator<Item = embedded_graphics::Pixel<Self::Color>>,
     {
+        let width: i32 = ESP_DISPLAY_WIDTH as i32;
+        let height: i32 = ESP_DISPLAY_HEIGHT as i32;
         for Pixel(coord, color) in pixels.into_iter() {
-            if let (x @ 0..ESP_DISPLAY_WIDTH, y @ 0..ESP_DISPLAY_HEIGHT) = coord.into() {
-                let index = (y * ESP_DISPLAY_WIDTH + x) as usize;
+            let (x, y) = coord.into();
+            if x >= 0 && x < width && y >= 0 && y < height {
+                let index = (y * width + x) as usize;
                 self.pixels[index] = color;
             }
         }
@@ -231,7 +221,7 @@ impl Dimensions for EspDisplay {
     fn bounding_box(&self) -> Rectangle {
         Rectangle::new(
             Point::zero(),
-            Size::new(ESP_DISPLAY_WIDTH as u32, ESP_DISPLAY_HEIGHT as u32),
+            Size::new(ESP_DISPLAY_WIDTH, ESP_DISPLAY_HEIGHT),
         )
     }
 }

@@ -16,6 +16,8 @@ pub struct MainMenu<'a> {
     items: Vec<&'a str>,
     selected: usize,
     previous_selected: usize,
+    scroll_offset: usize,
+    horizontal_scroll_offset: usize,
 }
 
 impl MainMenu<'_> {
@@ -35,6 +37,8 @@ impl MainMenu<'_> {
             ],
             selected: 0,
             previous_selected: 0,
+            scroll_offset: 0,
+            horizontal_scroll_offset: 0,
         }
     }
 
@@ -60,6 +64,22 @@ impl Menu for MainMenu<'_> {
 
     fn previous_selected(&self) -> usize {
         self.previous_selected
+    }
+
+    fn menu_scroll_offset(&self) -> usize {
+        self.scroll_offset
+    }
+
+    fn set_menu_scroll_offset(&mut self, offset: usize) {
+        self.scroll_offset = offset;
+    }
+
+    fn selected_scroll_offset(&self) -> usize {
+        self.horizontal_scroll_offset
+    }
+
+    fn set_selected_scroll_offset(&mut self, offset: usize) {
+        self.horizontal_scroll_offset = offset;
     }
 }
 
@@ -93,6 +113,10 @@ impl Screen for MainMenu<'_> {
     }
 
     fn menu(&self) -> Option<&dyn Menu> {
+        Some(self)
+    }
+
+    fn menu_mut(&mut self) -> Option<&mut dyn Menu> {
         Some(self)
     }
 }

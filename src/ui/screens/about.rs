@@ -1,4 +1,3 @@
-use crate::display::EspDisplay;
 use crate::ui::screen::Screen;
 
 pub struct AboutMenu<'a> {
@@ -10,7 +9,7 @@ impl AboutMenu<'_> {
     pub fn new() -> Self {
         Self {
             title: "About",
-            content: "Wrait Probe.\nVersion 0.1.0\nDeveloped by JRT.",
+            content: "Wraith Probe.\nVersion 0.1.0\nDeveloped by JRT.",
         }
     }
 }

@@ -144,7 +144,7 @@ fn main() -> Result<(), EspError> {
                     log::info!("Partial dirty context, re-rendering area: {:?}", area);
                 }
             }
-            router.current_screen().render(&mut display);
+            router.current_screen_mut().render(&mut display);
             display.flush();
             ctx.clear_dirty();
         }
