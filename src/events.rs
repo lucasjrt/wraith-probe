@@ -1,6 +1,6 @@
 // use crate::service::Service;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum AppEvent {
     DownPressed,
@@ -10,7 +10,7 @@ pub enum AppEvent {
     Net(NetworkEvent),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum NetworkEvent {
     Connected,

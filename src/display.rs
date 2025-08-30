@@ -4,7 +4,7 @@ use embedded_graphics::{
     pixelcolor::Rgb565,
     prelude::{Dimensions, Point, PointsIter, RgbColor, Size},
     primitives::Rectangle,
-    text::Text,
+    text::{Alignment, Baseline, Text, TextStyleBuilder},
     Drawable, Pixel,
 };
 use esp_idf_svc::hal::{
@@ -23,6 +23,7 @@ pub struct EspDisplay {
     display: DisplayType,
     backlight: PinDriver<'static, AnyIOPin, Output>,
     pixels: Box<[Rgb565; ESP_DISPLAY_BUFFER_SIZE]>,
+    theme: Theme,
 }
 
 type DisplayType = Display<
@@ -40,6 +41,11 @@ pub const ESP_DISPLAY_BUFFER_SIZE: usize =
     (ESP_DISPLAY_WIDTH as usize) * (ESP_DISPLAY_HEIGHT as usize);
 pub const FONT_COLOR: Rgb565 = Rgb565::GREEN;
 pub const BACKGROUND_COLOR: Rgb565 = Rgb565::BLACK;
+
+pub struct Theme {
+    pub primary: Rgb565,
+    pub secondary: Rgb565,
+}
 
 impl EspDisplay {
     pub fn new(
@@ -93,6 +99,10 @@ impl EspDisplay {
             display,
             backlight,
             pixels,
+            theme: Theme {
+                primary: Rgb565::GREEN,
+                secondary: Rgb565::BLACK,
+            },
         }
     }
 
@@ -118,9 +128,30 @@ impl EspDisplay {
             .unwrap();
     }
 
-    pub fn text(&mut self, text: &str, x: i32, y: i32) {
-        let style = MonoTextStyle::new(&FONT_8X13, FONT_COLOR);
-        Text::new(text, Point::new(x, y), style).draw(self).unwrap();
+    pub fn text(
+        &mut self,
+        text: &str,
+        x: i32,
+        y: i32,
+        color: Option<Rgb565>,
+        alignment: Option<Alignment>,
+    ) {
+        let alignment = alignment.unwrap_or(Alignment::Left);
+        let color = color.unwrap_or(self.theme().primary());
+        let font = MonoTextStyle::new(&FONT_8X13, color);
+        let style = TextStyleBuilder::new()
+            .baseline(Baseline::Top)
+            .alignment(alignment)
+            .build();
+        let mut x = x;
+
+        if alignment == Alignment::Center && x < 0 {
+            x = ESP_DISPLAY_WIDTH / 2;
+        }
+
+        Text::with_text_style(text, Point::new(x, y), font, style)
+            .draw(self)
+            .unwrap();
     }
 
     pub fn enable_backlight(&mut self) {
@@ -136,6 +167,45 @@ impl EspDisplay {
         self.display
             .fill_contiguous(&self.display.bounding_box(), self.pixels.iter().copied())
             .unwrap();
+    }
+
+    pub fn font_height(&self) -> i32 {
+        // TODO: Make this dynamic based on the font used
+        13
+    }
+
+    pub fn width(&self) -> i32 {
+        ESP_DISPLAY_WIDTH
+    }
+
+    pub fn height(&self) -> i32 {
+        ESP_DISPLAY_HEIGHT
+    }
+
+    pub fn theme(&self) -> &Theme {
+        &self.theme
+    }
+}
+
+impl Theme {
+    pub fn new(primary: Rgb565, secondary: Rgb565) -> Self {
+        Self { primary, secondary }
+    }
+
+    pub fn primary(&self) -> Rgb565 {
+        self.primary
+    }
+
+    pub fn secondary(&self) -> Rgb565 {
+        self.secondary
+    }
+
+    pub fn set_primary(&mut self, color: Rgb565) {
+        self.primary = color;
+    }
+
+    pub fn set_secondary(&mut self, color: Rgb565) {
+        self.secondary = color;
     }
 }
 

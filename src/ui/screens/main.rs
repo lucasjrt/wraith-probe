@@ -2,11 +2,11 @@ use embedded_graphics::primitives::Rectangle;
 
 use crate::{
     context::{Context, Dirty},
-    display::EspDisplay,
     events::AppEvent,
     menu::Menu,
     ui::{
         router::RouterCommand,
+        screen::Screen,
         screens::{about::AboutMenu, not_implemented::NotImplementedScreen},
     },
 };
@@ -18,22 +18,24 @@ pub struct MainMenu<'a> {
     previous_selected: usize,
 }
 
-impl<'a> MainMenu<'a> {
+impl MainMenu<'_> {
     pub fn new() -> Self {
         Self {
             title: "Main Menu",
-            items: vec!["Wi-Fi", "Bluetooth", "Settings", "About"],
+            items: vec![
+                "Wi-Fi",
+                "Bluetooth",
+                "Settings",
+                "About",
+                "Exit But Actually not the real, only for horizontal menu testing",
+                "Restart",
+                "Shutdown",
+                "Sleep",
+                "Factory Reset",
+            ],
             selected: 0,
             previous_selected: 0,
         }
-    }
-
-    pub fn items(&self) -> &Vec<&'a str> {
-        &self.items
-    }
-
-    pub fn selected(&self) -> usize {
-        self.selected
     }
 
     pub fn navigate_up(&mut self) {
@@ -48,26 +50,20 @@ impl<'a> MainMenu<'a> {
 }
 
 impl Menu for MainMenu<'_> {
-    fn title(&self) -> &str {
-        self.title
+    fn items(&self) -> &[&str] {
+        &self.items
     }
 
-    fn render(&self, display: &mut EspDisplay) {
-        display.text(&format!("=== {} ===", self.title()), 10, 10);
-        for (i, item) in self.items().iter().enumerate() {
-            if i == self.previous_selected {
-                display.fill_rect(0, 30 + (i as i32 * 20) - 10, 128, 20, None);
-            }
-
-            if i == self.selected() {
-                display.fill_rect(0, 30 + (i as i32 * 20) - 10, 128, 20, None);
-                display.text(&format!("> {}", item), 10, 30 + (i as i32 * 20));
-            } else {
-                display.text(item, 10, 30 + (i as i32 * 20));
-            }
-        }
+    fn selected(&self) -> usize {
+        self.selected
     }
 
+    fn previous_selected(&self) -> usize {
+        self.previous_selected
+    }
+}
+
+impl Screen for MainMenu<'_> {
     fn on_event(&mut self, event: &AppEvent, ctx: &mut Context) -> Option<RouterCommand> {
         match event {
             AppEvent::UpPressed => self.navigate_up(),
@@ -103,5 +99,17 @@ impl Menu for MainMenu<'_> {
         }
         ctx.set_dirty(Dirty::Partial(Rectangle::default()));
         None
+    }
+
+    fn title(&self) -> &str {
+        self.title
+    }
+
+    fn menu(&self) -> Option<&dyn Menu> {
+        Some(self)
+    }
+
+    fn menu_mut(&mut self) -> Option<&mut dyn Menu> {
+        Some(self)
     }
 }

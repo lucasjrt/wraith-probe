@@ -84,7 +84,7 @@ fn main() -> Result<(), EspError> {
     // log::info!("Wifi agent started");
 
     log::info!("Initialization complete, starting ui");
-    display.text("Initialization complete", 10, 50);
+    display.text("Initialization complete", 10, 50, None, None);
 
     let delay = Delay::new(1);
     delay.delay_ms(1000);
@@ -144,14 +144,14 @@ fn main() -> Result<(), EspError> {
                     log::info!("Partial dirty context, re-rendering area: {:?}", area);
                 }
             }
-            router.current_menu().render(&mut display);
+            router.current_screen().render(&mut display);
             display.flush();
             ctx.clear_dirty();
         }
 
         if let Ok(event) = app_rx.recv() {
             log::info!("Event received: {:?}", event);
-            if let Some(cmd) = router.current_menu_mut().on_event(&event, &mut ctx) {
+            if let Some(cmd) = router.on_event(&event, &mut ctx) {
                 log::info!("Router command: {}", cmd);
                 router.apply(cmd);
                 ctx.set_dirty(Dirty::Full);

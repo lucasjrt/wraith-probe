@@ -1,6 +1,5 @@
-use crate::context::Context;
-use crate::ui::router::RouterCommand;
-use crate::{display::EspDisplay, events::AppEvent, menu::Menu};
+use crate::display::EspDisplay;
+use crate::ui::screen::Screen;
 
 pub struct AboutMenu<'a> {
     title: &'a str,
@@ -16,21 +15,12 @@ impl AboutMenu<'_> {
     }
 }
 
-impl Menu for AboutMenu<'_> {
+impl Screen for AboutMenu<'_> {
     fn title(&self) -> &str {
         self.title
     }
 
-    fn render(&self, display: &mut EspDisplay) {
-        display.clear();
-        display.text(&format!("=== {} ===", self.title()), 10, 10);
-        display.text(self.content, 10, 30);
-    }
-
-    fn on_event(&mut self, event: &AppEvent, _ctx: &mut Context) -> Option<RouterCommand> {
-        if let AppEvent::BackPressed = event {
-            return Some(RouterCommand::NavigateBack);
-        }
-        None
+    fn content(&self) -> &str {
+        self.content
     }
 }
