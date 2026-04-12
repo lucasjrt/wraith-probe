@@ -1,21 +1,28 @@
-use crate::{display::EspDisplay, ui::screen::Screen};
+use std::sync::{Arc, RwLock};
+
+use crate::{context::Context, display::EspDisplay, ui::screen::Screen};
 
 pub struct BootingScreen {
-    content: Vec<String>,
+    content: String,
 }
 
 impl BootingScreen {
     pub fn new() -> Self {
-        BootingScreen { content: vec![] }
+        BootingScreen {
+            content: String::new(),
+        }
     }
 
     pub fn add_line(&mut self, line: &str) {
-        self.content.push(line.to_string());
+        if !self.content.is_empty() {
+            self.content.push('\n');
+        }
+        self.content.push_str(line);
     }
 
-    pub fn log(&mut self, line: &str, display: &mut EspDisplay) {
+    pub fn log(&mut self, line: &str, display: &mut EspDisplay, ctx: Arc<RwLock<Context>>) {
         self.add_line(line);
-        self.render(display);
+        self.render(display, ctx);
         display.flush();
     }
 }
@@ -26,6 +33,6 @@ impl Screen for BootingScreen {
     }
 
     fn content(&self) -> &str {
-        Box::leak(self.content.join("\n").into_boxed_str())
+        &self.content
     }
 }

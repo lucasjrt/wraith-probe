@@ -1,11 +1,11 @@
 use crate::ui::screen::Screen;
 
-pub struct AboutMenu<'a> {
-    title: &'a str,
-    content: &'a str,
+pub struct AboutMenu {
+    title: &'static str,
+    content: &'static str,
 }
 
-impl AboutMenu<'_> {
+impl AboutMenu {
     pub fn new() -> Self {
         Self {
             title: "About",
@@ -14,7 +14,7 @@ impl AboutMenu<'_> {
     }
 }
 
-impl Screen for AboutMenu<'_> {
+impl Screen for AboutMenu {
     fn title(&self) -> &str {
         self.title
     }

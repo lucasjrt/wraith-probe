@@ -1,4 +1,7 @@
-use std::fmt::Display;
+use std::{
+    fmt::Display,
+    sync::{Arc, RwLock},
+};
 
 use crate::{context::Context, events::AppEvent, ui::screen::Screen};
 
@@ -21,7 +24,6 @@ impl Display for RouterCommand {
     }
 }
 
-#[allow(dead_code)]
 impl Router {
     pub fn new<M: Screen + 'static>(screen: M) -> Self {
         Self {
@@ -41,11 +43,11 @@ impl Router {
         }
     }
 
-    pub fn current_screen(&self) -> &dyn Screen {
-        &*self.current_screen
-    }
-
-    pub fn on_event(&mut self, event: &AppEvent, ctx: &mut Context) -> Option<RouterCommand> {
+    pub fn on_event(
+        &mut self,
+        event: &AppEvent,
+        ctx: Arc<RwLock<Context>>,
+    ) -> Option<RouterCommand> {
         self.current_screen_mut().on_event(event, ctx)
     }
 

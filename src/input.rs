@@ -88,7 +88,7 @@ impl<S: PinWrapper, B: PinWrapper> Input<S, B> {
 
             self.back_button.reset();
             self.select_button.reset();
-            self.delay.delay_us(10);
+            self.delay.delay_ms(5);
         }
     }
 

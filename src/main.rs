@@ -2,7 +2,10 @@ use esp_idf_svc::{
     hal::{delay::Delay, gpio::PinDriver, prelude::Peripherals},
     sys::EspError,
 };
-use std::{sync::mpsc, thread};
+use std::{
+    sync::{mpsc::channel, Arc, RwLock},
+    thread,
+};
 
 mod context;
 mod display;
@@ -10,19 +13,14 @@ mod events;
 mod input;
 mod menu;
 mod ui;
-// mod wifi;
 
 use events::AppEvent;
 use ui::router::Router;
-// use wifi::init_wifi;
 
 use crate::{
     context::{Context, Dirty},
     display::EspDisplay,
-    ui::{
-        screen::Screen,
-        screens::{booting::BootingScreen, main::MainMenu},
-    },
+    ui::screens::{booting::BootingScreen, main::MainMenu},
 };
 
 fn init_sys() {
@@ -31,19 +29,17 @@ fn init_sys() {
 }
 
 fn main() -> Result<(), EspError> {
-    log::info!("Starting ESP32 application");
+    log::info!("Starting Wraith Probe");
     init_sys();
-
-    log::info!("ESP32 initialized!");
 
     let peripherals = Peripherals::take().unwrap();
     let pins = peripherals.pins;
-    // let modem = peripherals.modem;
 
     let select_button_pin = PinDriver::input(pins.gpio0).unwrap();
     let back_button_pin = PinDriver::input(pins.gpio35).unwrap();
 
-    let (app_tx, app_rx) = mpsc::channel::<AppEvent>();
+    let (app_tx, app_rx) = channel::<AppEvent>();
+    let ctx = Arc::new(RwLock::new(Context::new(app_tx.clone())));
 
     log::info!("Initializing display");
     let mut display = EspDisplay::new(
@@ -61,108 +57,73 @@ fn main() -> Result<(), EspError> {
     log::info!("Display initialized");
 
     let mut booting_screen = BootingScreen::new();
-    booting_screen.log("Display initialized", &mut display);
+    booting_screen.log("Display initialized", &mut display, ctx.clone());
 
-    booting_screen.log("Starting input handler", &mut display);
+    booting_screen.log("Starting input handler", &mut display, ctx.clone());
     log::info!("Starting input handler");
     let mut input = input::Input::new(select_button_pin, back_button_pin);
-    thread::spawn(move || loop {
+    thread::spawn(move || {
         input.run(app_tx.clone());
     });
     log::info!("Input handler started");
-    booting_screen.log("Input handler started", &mut display);
-
-    // log::info!("Starting wifi agent");
-    // display.text("Starting wifi agent", 10, 10);
-    // display.text("Please wait...", 10, 30);
-    //
-    // let mut _wifi = match init_wifi(modem) {
-    //     Ok(wifi) => {
-    //         display.clear();
-    //         display.text("Wifi agent initialized", 13, 13);
-    //         wifi
-    //     }
-    //     Err(e) => {
-    //         log::error!("Failed to initialize wifi agent: {:?}", e);
-    //         display.clear();
-    //         display.text("Failed to initialize wifi agent", 10, 10);
-    //         return Err(e);
-    //     }
-    // };
-    // log::info!("Wifi agent started");
+    booting_screen.log("Input handler started", &mut display, ctx.clone());
 
     log::info!("Initialization complete, starting ui");
-    booting_screen.log("Initialization complete", &mut display);
+    booting_screen.log("Initialization complete", &mut display, ctx.clone());
 
     let delay = Delay::new(1);
     delay.delay_ms(1000);
     display.clear();
 
-    // // Wifi agent
-    // thread::Builder::new()
-    //     .stack_size(32 * 1024)
-    //     .spawn(move || {
-    //         for cmd in wifi_agent_cmd_rx {
-    //             match cmd {
-    //                 ScanCommand::Start => {
-    //                     let _ = wifi_agent_state_tx.send(ScanState::Scanning);
-    //
-    //                     match wifi.scan() {
-    //                         Ok(aps) => {
-    //                             log::info!("Scan complete: {:?}", aps);
-    //                             wifi_agent_state_tx.send(ScanState::Complete(aps)).unwrap();
-    //                         }
-    //                         Err(e) => {
-    //                             log::error!("Failed to start scan: {:?}", e);
-    //                             wifi_agent_state_tx.send(ScanState::Failed).unwrap();
-    //                             continue;
-    //                         }
-    //                     };
-    //                     log::info!("Scan complete");
-    //                 }
-    //                 ScanCommand::Stop => {
-    //                     log::info!("Stopping scan");
-    //                     match wifi.wifi_mut().stop_scan() {
-    //                         Ok(_) => {
-    //                             log::info!("Scan stopped");
-    //                         }
-    //                         Err(e) => {
-    //                             log::error!("Failed to stop scan: {:?}", e);
-    //                             wifi_agent_state_tx.send(ScanState::Failed).unwrap();
-    //                         }
-    //                     };
-    //                     wifi_agent_state_tx.send(ScanState::Idle).unwrap();
-    //                 }
-    //             }
-    //         }
-    //     })
-    //     .unwrap();
-
+    log::info!("Initializing router with main menu");
     let mut router = Router::new(MainMenu::new());
-    let mut ctx = Context::new();
+    {
+        ctx.write()
+            .expect("Failed to lock context")
+            .set_dirty(Dirty::Full);
+    }
     loop {
-        if let Some(dirty_type) = ctx.get_dirty() {
+        let dirty = {
+            ctx.read()
+                .expect("Failed to lock context")
+                .get_dirty()
+                .clone()
+        };
+
+        if let Some(dirty_type) = dirty {
             match dirty_type {
                 Dirty::Full => {
-                    log::info!("Full dirty context, re-rendering entire display");
                     display.clear();
                 }
-                Dirty::Partial(area) => {
+                Dirty::Partial(_area) => {
                     // TODO: Implement partial rendering logic
-                    log::info!("Partial dirty context, re-rendering area: {:?}", area);
                 }
             }
-            router.current_screen_mut().render(&mut display);
+            router
+                .current_screen_mut()
+                .render(&mut display, ctx.clone());
             display.flush();
-            ctx.clear_dirty();
+            {
+                ctx.write().expect("Failed to lock context").clear_dirty();
+            }
         }
 
         if let Ok(event) = app_rx.recv() {
-            log::info!("Event received: {:?}", event);
-            if let Some(cmd) = router.on_event(&event, &mut ctx) {
-                log::info!("Router command: {}", cmd);
+            if event == AppEvent::Redraw {
+                {
+                    ctx.write()
+                        .expect("Failed to lock context")
+                        .set_dirty(Dirty::Full);
+                }
+                continue;
+            }
+            if let Some(cmd) = router.on_event(&event, ctx.clone()) {
                 router.apply(cmd);
-                ctx.set_dirty(Dirty::Full);
+                {
+                    ctx.write()
+                        .expect("Failed to lock context")
+                        .set_dirty(Dirty::Full);
+                }
             }
         }
         delay.delay_us(10);

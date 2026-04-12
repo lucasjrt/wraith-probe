@@ -1,17 +1,14 @@
-// use crate::service::Service;
-
 #[derive(Debug, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum AppEvent {
     DownPressed,
     UpPressed,
     SelectPressed,
     BackPressed,
     Net(NetworkEvent),
+    Redraw,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum NetworkEvent {
     Connected,
     Disconnected,

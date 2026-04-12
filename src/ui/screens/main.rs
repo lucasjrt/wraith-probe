@@ -1,4 +1,7 @@
+use std::sync::{Arc, RwLock};
+
 use embedded_graphics::primitives::Rectangle;
+use esp_idf_svc::timer::EspTimer;
 
 use crate::{
     context::{Context, Dirty},
@@ -11,16 +14,17 @@ use crate::{
     },
 };
 
-pub struct MainMenu<'a> {
-    title: &'a str,
-    items: Vec<&'a str>,
+pub struct MainMenu {
+    title: &'static str,
+    items: Vec<&'static str>,
     selected: usize,
     previous_selected: usize,
     scroll_offset: usize,
-    horizontal_scroll_offset: usize,
+    horizontal_scroll_offset: i32,
+    scroll_timer: Option<EspTimer<'static>>,
 }
 
-impl MainMenu<'_> {
+impl MainMenu {
     pub fn new() -> Self {
         Self {
             title: "Main Menu",
@@ -39,6 +43,7 @@ impl MainMenu<'_> {
             previous_selected: 0,
             scroll_offset: 0,
             horizontal_scroll_offset: 0,
+            scroll_timer: None,
         }
     }
 
@@ -53,7 +58,7 @@ impl MainMenu<'_> {
     }
 }
 
-impl Menu for MainMenu<'_> {
+impl Menu for MainMenu {
     fn items(&self) -> &[&str] {
         &self.items
     }
@@ -74,27 +79,39 @@ impl Menu for MainMenu<'_> {
         self.scroll_offset = offset;
     }
 
-    fn selected_scroll_offset(&self) -> usize {
+    fn selected_scroll_offset(&self) -> i32 {
         self.horizontal_scroll_offset
     }
 
-    fn set_selected_scroll_offset(&mut self, offset: usize) {
+    fn set_selected_scroll_offset(&mut self, offset: i32) {
         self.horizontal_scroll_offset = offset;
+    }
+
+    fn scroll_timer(&self) -> &Option<EspTimer<'static>> {
+        &self.scroll_timer
+    }
+
+    fn set_scroll_timer(&mut self, timer: Option<EspTimer<'static>>) {
+        self.scroll_timer = timer;
     }
 }
 
-impl Screen for MainMenu<'_> {
-    fn on_event(&mut self, event: &AppEvent, ctx: &mut Context) -> Option<RouterCommand> {
+impl Screen for MainMenu {
+    fn on_event(&mut self, event: &AppEvent, ctx: Arc<RwLock<Context>>) -> Option<RouterCommand> {
         match event {
             AppEvent::UpPressed => self.navigate_up(),
             AppEvent::DownPressed => self.navigate_down(),
             AppEvent::SelectPressed => match self.items[self.selected] {
                 "About" => {
-                    ctx.set_dirty(Dirty::Full);
+                    if let Ok(mut ctx) = ctx.write() {
+                        ctx.set_dirty(Dirty::Full);
+                    }
                     return Some(RouterCommand::NavigateTo(Box::new(AboutMenu::new())));
                 }
                 text => {
-                    ctx.set_dirty(Dirty::Full);
+                    if let Ok(mut ctx) = ctx.write() {
+                        ctx.set_dirty(Dirty::Full);
+                    }
                     return Some(RouterCommand::NavigateTo(Box::new(
                         NotImplementedScreen::new(String::from(text)),
                     )));
@@ -104,7 +121,11 @@ impl Screen for MainMenu<'_> {
                 return None;
             }
         }
-        ctx.set_dirty(Dirty::Partial(Rectangle::default()));
+        {
+            if let Ok(mut ctx) = ctx.write() {
+                ctx.set_dirty(Dirty::Partial(Rectangle::default()));
+            }
+        }
         None
     }
 

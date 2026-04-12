@@ -1,4 +1,9 @@
+use std::sync::mpsc::Sender;
+
 use embedded_graphics::primitives::Rectangle;
+use esp_idf_svc::timer::EspTaskTimerService;
+
+use crate::events::AppEvent;
 
 pub struct Context {
     services: Services,
@@ -6,23 +11,22 @@ pub struct Context {
 }
 
 pub struct Services {
-    // Add service handles here as needed
-    // wifi: Sender<WifiCommand>,
-    // ui: Sender<UiCommand>,
+    timer: EspTaskTimerService,
+    app: Sender<AppEvent>,
 }
 
+#[derive(Debug, Clone)]
 pub enum Dirty {
     Full,
     Partial(Rectangle),
 }
 
-#[allow(dead_code)]
 impl Context {
-    pub fn new() -> Self {
+    pub fn new(app: Sender<AppEvent>) -> Self {
         Context {
             services: Services {
-                // wifi,
-                // ui,
+                timer: EspTaskTimerService::new().expect("Failed to create timer service"),
+                app,
             },
             dirty: Some(Dirty::Full),
         }
@@ -42,5 +46,15 @@ impl Context {
 
     pub fn services(&self) -> &Services {
         &self.services
+    }
+}
+
+impl Services {
+    pub fn timer(&self) -> &EspTaskTimerService {
+        &self.timer
+    }
+
+    pub fn app(&self) -> &Sender<AppEvent> {
+        &self.app
     }
 }

@@ -18,7 +18,6 @@ use esp_idf_svc::hal::{
 };
 use mipidsi::{interface::SpiInterface, models::ST7789, options::Orientation, Builder, Display};
 
-#[allow(dead_code)]
 pub struct EspDisplay {
     display: DisplayType,
     backlight: PinDriver<'static, AnyIOPin, Output>,
@@ -35,8 +34,8 @@ type DisplayType = Display<
     ST7789,
     PinDriver<'static, AnyIOPin, esp_idf_svc::hal::gpio::Output>,
 >;
-pub const ESP_DISPLAY_WIDTH: u32 = 240;
-pub const ESP_DISPLAY_HEIGHT: u32 = 135;
+pub const ESP_DISPLAY_WIDTH: usize = 240;
+pub const ESP_DISPLAY_HEIGHT: usize = 135;
 pub const ESP_DISPLAY_BUFFER_SIZE: usize =
     (ESP_DISPLAY_WIDTH as usize) * (ESP_DISPLAY_HEIGHT as usize);
 
@@ -101,7 +100,6 @@ impl EspDisplay {
         }
     }
 
-    #[allow(dead_code)]
     pub fn toggle_backlight(&mut self) {
         self.backlight.toggle().unwrap();
     }
@@ -153,7 +151,6 @@ impl EspDisplay {
         self.backlight.set_high().unwrap();
     }
 
-    #[allow(dead_code)]
     pub fn disable_backlight(&mut self) {
         self.backlight.set_low().unwrap();
     }
@@ -164,16 +161,21 @@ impl EspDisplay {
             .unwrap();
     }
 
-    pub fn font_height(&self) -> u32 {
+    pub fn font_height(&self) -> usize {
         // TODO: Make this dynamic based on the font used
         13
     }
 
-    pub fn width(&self) -> u32 {
+    pub fn font_width(&self) -> usize {
+        // TODO: Make this dynamic based on the font used
+        8
+    }
+
+    pub fn width(&self) -> usize {
         ESP_DISPLAY_WIDTH
     }
 
-    pub fn height(&self) -> u32 {
+    pub fn height(&self) -> usize {
         ESP_DISPLAY_HEIGHT
     }
 
@@ -221,7 +223,7 @@ impl Dimensions for EspDisplay {
     fn bounding_box(&self) -> Rectangle {
         Rectangle::new(
             Point::zero(),
-            Size::new(ESP_DISPLAY_WIDTH, ESP_DISPLAY_HEIGHT),
+            Size::new(ESP_DISPLAY_WIDTH as u32, ESP_DISPLAY_HEIGHT as u32),
         )
     }
 }

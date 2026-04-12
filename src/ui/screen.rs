@@ -1,3 +1,8 @@
+use std::{
+    sync::{Arc, RwLock},
+    time::Duration,
+};
+
 use embedded_graphics::{
     prelude::{Point, Size},
     primitives::Rectangle,
@@ -5,7 +10,11 @@ use embedded_graphics::{
 };
 
 use crate::{
-    context::Context, display::EspDisplay, events::AppEvent, menu::Menu, ui::router::RouterCommand,
+    context::{Context, Dirty},
+    display::EspDisplay,
+    events::AppEvent,
+    menu::Menu,
+    ui::router::RouterCommand,
 };
 
 pub trait Screen {
@@ -26,7 +35,7 @@ pub trait Screen {
         );
     }
 
-    fn render_content(&mut self, display: &mut EspDisplay) {
+    fn render_content(&mut self, display: &mut EspDisplay, ctx: Arc<RwLock<Context>>) {
         let title_height = self.title_height(display);
         let visible_item_count = self.visible_items_count(display);
         let item_height = self.item_height(display) as i32;
@@ -48,8 +57,8 @@ pub trait Screen {
             return;
         };
 
-        if menu_mut.selected() >= menu_mut.menu_scroll_offset() + (visible_item_count as usize) {
-            let new_offset = menu_mut.selected() + 1 - (visible_item_count as usize);
+        if menu_mut.selected() >= menu_mut.menu_scroll_offset() + (visible_item_count) {
+            let new_offset = menu_mut.selected() + 1 - visible_item_count;
             menu_mut.set_menu_scroll_offset(new_offset);
         } else if menu_mut.selected() < menu_mut.menu_scroll_offset() {
             menu_mut.set_menu_scroll_offset(menu_mut.selected());
@@ -57,7 +66,7 @@ pub trait Screen {
 
         let menu_offset = menu_mut.menu_scroll_offset();
         let x = gap as i32;
-        for i in 0..visible_item_count as usize {
+        for i in 0..visible_item_count {
             let i = i + menu_offset;
             let Some(item) = menu_items.get(i) else {
                 break;
@@ -67,6 +76,60 @@ pub trait Screen {
             }
 
             if i == menu_mut.selected() {
+                let mut x_offset: i32 = -menu_mut.selected_scroll_offset();
+                let font_width = display.font_width();
+                let text_width = item.len() * font_width;
+                let display_width = display.width() - (gap * 2);
+
+                if text_width > display_width {
+                    let max_offset = (text_width - display_width) as i32;
+                    let new_offset = x_offset - menu_mut.selected_scroll_speed();
+                    if new_offset.abs() >= max_offset {
+                        menu_mut.set_selected_scroll_offset(-max_offset);
+                    } else {
+                        menu_mut.set_selected_scroll_offset(new_offset);
+                    }
+
+                    // Only create a new timer if one doesn't already exist
+                    if menu_mut.scroll_timer().is_none() {
+                        log::info!("Creating horizontal scroll timer");
+                        let callback_ctx = ctx.clone();
+                        let timer = {
+                            ctx.read()
+                                .expect("Failed to lock context")
+                                .services()
+                                .timer()
+                                .clone()
+                        };
+                        let callback_timer = timer
+                            .timer(move || {
+                                if let Ok(mut ctx) = callback_ctx.write() {
+                                    ctx.set_dirty(Dirty::Full);
+                                    let _ = ctx.services().app().send(AppEvent::Redraw);
+                                }
+                            })
+                            .expect("Failed to create timer");
+                        let delay = menu_mut.scroll_delay_ms() as u64;
+                        callback_timer
+                            .after(Duration::from_millis(delay))
+                            .expect("Failed to set timer");
+                        menu_mut.set_scroll_timer(Some(callback_timer));
+                    } else {
+                        // Reuse existing timer — just reschedule it
+                        let delay = menu_mut.scroll_delay_ms() as u64;
+                        if let Some(timer) = menu_mut.scroll_timer() {
+                            let _ = timer.after(Duration::from_millis(delay));
+                        }
+                    }
+                } else {
+                    x_offset = 0;
+                    menu_mut.set_selected_scroll_offset(0);
+                    // Clear the timer when text fits on screen
+                    menu_mut.set_scroll_timer(None);
+                }
+
+                let text_offset = 2 * display.font_width() as i32 + x_offset;
+
                 display.fill_rect(
                     x,
                     y,
@@ -75,7 +138,22 @@ pub trait Screen {
                     Some(display.theme().secondary()),
                 );
                 display.text(
-                    &format!("> {}", item),
+                    item,
+                    text_offset,
+                    y + (gap / 2) as i32,
+                    Some(display.theme().primary()),
+                    None,
+                );
+
+                display.fill_rect(
+                    x,
+                    y + (gap / 2) as i32,
+                    display.font_width() as i32,
+                    display.font_height() as i32,
+                    Some(display.theme().secondary()),
+                );
+                display.text(
+                    ">",
                     x,
                     y + (gap / 2) as i32,
                     Some(display.theme().primary()),
@@ -94,19 +172,18 @@ pub trait Screen {
         }
     }
 
-    #[allow(unused_variables)]
-    fn on_event(&mut self, event: &AppEvent, ctx: &mut Context) -> Option<RouterCommand> {
+    fn on_event(&mut self, event: &AppEvent, _ctx: Arc<RwLock<Context>>) -> Option<RouterCommand> {
         if event == &AppEvent::BackPressed {
             return Some(RouterCommand::NavigateBack);
         }
         None
     }
 
-    fn title_margin(&self) -> u32 {
+    fn title_margin(&self) -> usize {
         3
     }
 
-    fn title_height(&self, display: &EspDisplay) -> u32 {
+    fn title_height(&self, display: &EspDisplay) -> usize {
         display.font_height() + (self.title_margin() * 2)
     }
 
@@ -114,18 +191,18 @@ pub trait Screen {
         "Title"
     }
 
-    fn item_gap(&self) -> u32 {
+    fn item_gap(&self) -> usize {
         5
     }
 
-    fn item_height(&self, display: &EspDisplay) -> u32 {
+    fn item_height(&self, display: &EspDisplay) -> usize {
         display.font_height() + self.item_gap()
     }
 
-    fn render(&mut self, display: &mut EspDisplay) {
+    fn render(&mut self, display: &mut EspDisplay, ctx: Arc<RwLock<Context>>) {
         display.clear();
         self.render_title(display);
-        self.render_content(display);
+        self.render_content(display, ctx);
     }
 
     fn menu(&self) -> Option<&dyn Menu> {
@@ -140,25 +217,18 @@ pub trait Screen {
         ""
     }
 
-    fn get_title_bounding_box(&self, display: &EspDisplay) -> Rectangle {
-        Rectangle::new(
-            Point::new(0, 0),
-            Size::new(display.width(), self.title_height(display)),
-        )
-    }
-
     fn get_content_bounding_box(&self, display: &EspDisplay) -> Rectangle {
         Rectangle::new(
             Point::new(0, self.title_height(display) as i32),
             Size::new(
-                display.width(),
-                display.height() - self.title_height(display),
+                display.width() as u32,
+                (display.height() - self.title_height(display)) as u32,
             ),
         )
     }
 
-    fn visible_items_count(&self, display: &EspDisplay) -> u32 {
-        let content_height = self.get_content_bounding_box(display).size.height;
+    fn visible_items_count(&self, display: &EspDisplay) -> usize {
+        let content_height = self.get_content_bounding_box(display).size.height as usize;
         content_height / self.item_height(display)
     }
 }
