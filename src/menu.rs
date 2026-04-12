@@ -13,10 +13,10 @@ pub trait Menu {
     }
     fn set_selected_scroll_offset(&mut self, _offset: i32) {}
     fn selected_scroll_speed(&self) -> i32 {
-        10
+        4
     }
     fn scroll_delay_ms(&self) -> u32 {
-        2
+        80
     }
     fn scroll_timer(&self) -> &Option<EspTimer<'static>> {
         &None

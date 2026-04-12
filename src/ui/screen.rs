@@ -26,8 +26,19 @@ pub trait Screen {
             self.title_height(display) as i32,
             Some(display.theme().primary()),
         );
+
+        let title = self.title();
+        let max_chars = display.width() / display.font_width();
+        let truncated: String;
+        let display_title = if title.len() > max_chars {
+            truncated = format!("{}...", &title[..max_chars.saturating_sub(3)]);
+            &truncated
+        } else {
+            title
+        };
+
         display.text(
-            self.title(),
+            display_title,
             -1,
             (self.title_height(display) - display.font_height()) as i32 / 2,
             Some(display.theme().secondary()),
@@ -66,6 +77,8 @@ pub trait Screen {
 
         let menu_offset = menu_mut.menu_scroll_offset();
         let x = gap as i32;
+        let cursor_width = 2 * display.font_width() as i32;
+
         for i in 0..visible_item_count {
             let i = i + menu_offset;
             let Some(item) = menu_items.get(i) else {
@@ -76,23 +89,69 @@ pub trait Screen {
             }
 
             if i == menu_mut.selected() {
-                let mut x_offset: i32 = -menu_mut.selected_scroll_offset();
                 let font_width = display.font_width();
                 let text_width = item.len() * font_width;
-                let display_width = display.width() - (gap * 2);
+                let available_width = display.width() - (gap * 2) - cursor_width as usize;
 
-                if text_width > display_width {
-                    let max_offset = (text_width - display_width) as i32;
-                    let new_offset = x_offset - menu_mut.selected_scroll_speed();
-                    if new_offset.abs() >= max_offset {
-                        menu_mut.set_selected_scroll_offset(-max_offset);
+                // Fill the selected item background
+                display.fill_rect(
+                    x,
+                    y,
+                    display.width() as i32 - x,
+                    item_height,
+                    Some(display.theme().secondary()),
+                );
+
+                if text_width > available_width {
+                    let scroll_offset = menu_mut.selected_scroll_offset();
+                    let max_offset = (text_width - available_width) as i32;
+                    let speed = menu_mut.selected_scroll_speed();
+                    const PAUSE_FRAMES: i32 = 15;
+
+                    // Scroll phases: pause-at-start → scroll → pause-at-end → reset
+                    let effective_offset = if scroll_offset < PAUSE_FRAMES {
+                        0
+                    } else if scroll_offset < PAUSE_FRAMES + max_offset {
+                        scroll_offset - PAUSE_FRAMES
                     } else {
-                        menu_mut.set_selected_scroll_offset(new_offset);
-                    }
+                        max_offset
+                    };
 
-                    // Only create a new timer if one doesn't already exist
+                    let text_x = x + cursor_width - effective_offset;
+
+                    // Draw the text (may overflow left)
+                    display.text(
+                        item,
+                        text_x,
+                        y + (gap / 2) as i32,
+                        Some(display.theme().primary()),
+                        None,
+                    );
+
+                    // Clip left: cover from screen edge to end of cursor area
+                    display.fill_rect(
+                        0,
+                        y,
+                        x + cursor_width,
+                        item_height,
+                        Some(display.theme().secondary()),
+                    );
+
+                    // Advance scroll offset
+                    let new_offset = if scroll_offset < PAUSE_FRAMES {
+                        scroll_offset + 1
+                    } else if scroll_offset < PAUSE_FRAMES + max_offset {
+                        let next = scroll_offset + speed;
+                        next.min(PAUSE_FRAMES + max_offset)
+                    } else if scroll_offset < 2 * PAUSE_FRAMES + max_offset {
+                        scroll_offset + 1
+                    } else {
+                        0
+                    };
+                    menu_mut.set_selected_scroll_offset(new_offset);
+
+                    // Schedule next scroll frame
                     if menu_mut.scroll_timer().is_none() {
-                        log::info!("Creating horizontal scroll timer");
                         let callback_ctx = ctx.clone();
                         let timer = {
                             ctx.read()
@@ -115,43 +174,26 @@ pub trait Screen {
                             .expect("Failed to set timer");
                         menu_mut.set_scroll_timer(Some(callback_timer));
                     } else {
-                        // Reuse existing timer — just reschedule it
                         let delay = menu_mut.scroll_delay_ms() as u64;
                         if let Some(timer) = menu_mut.scroll_timer() {
                             let _ = timer.after(Duration::from_millis(delay));
                         }
                     }
                 } else {
-                    x_offset = 0;
+                    // Text fits — draw at normal position, no scroll
                     menu_mut.set_selected_scroll_offset(0);
-                    // Clear the timer when text fits on screen
                     menu_mut.set_scroll_timer(None);
+
+                    display.text(
+                        item,
+                        x + cursor_width,
+                        y + (gap / 2) as i32,
+                        Some(display.theme().primary()),
+                        None,
+                    );
                 }
 
-                let text_offset = 2 * display.font_width() as i32 + x_offset;
-
-                display.fill_rect(
-                    x,
-                    y,
-                    display.width() as i32 - x,
-                    item_height,
-                    Some(display.theme().secondary()),
-                );
-                display.text(
-                    item,
-                    text_offset,
-                    y + (gap / 2) as i32,
-                    Some(display.theme().primary()),
-                    None,
-                );
-
-                display.fill_rect(
-                    x,
-                    y + (gap / 2) as i32,
-                    display.font_width() as i32,
-                    display.font_height() as i32,
-                    Some(display.theme().secondary()),
-                );
+                // Draw the cursor
                 display.text(
                     ">",
                     x,

@@ -34,6 +34,7 @@ impl MainMenu {
                 "Settings",
                 "About",
                 "Exit But Actually not the real, only for horizontal menu testing",
+                "Another Long Item For Testing Scroll Reset Behavior",
                 "Restart",
                 "Shutdown",
                 "Sleep",
@@ -49,11 +50,15 @@ impl MainMenu {
 
     pub fn navigate_up(&mut self) {
         self.previous_selected = self.selected;
+        self.horizontal_scroll_offset = 0;
+        self.scroll_timer = None;
         self.selected = (self.selected + self.items.len() - 1) % self.items.len();
     }
 
     pub fn navigate_down(&mut self) {
         self.previous_selected = self.selected;
+        self.horizontal_scroll_offset = 0;
+        self.scroll_timer = None;
         self.selected = (self.selected + 1) % self.items.len();
     }
 }
