@@ -1,7 +1,4 @@
-use esp_idf_svc::{
-    hal::{delay::Delay, gpio::PinDriver, prelude::Peripherals},
-    sys::EspError,
-};
+use esp_idf_svc::hal::{delay::Delay, gpio::PinDriver, prelude::Peripherals};
 use std::{
     sync::{mpsc::channel, Arc, RwLock},
     thread,
@@ -9,6 +6,7 @@ use std::{
 
 mod context;
 mod display;
+mod error;
 mod events;
 mod input;
 mod menu;
@@ -20,6 +18,7 @@ use ui::router::Router;
 use crate::{
     context::{Context, Dirty},
     display::EspDisplay,
+    error::WraithResult,
     ui::screens::{booting::BootingScreen, main::MainMenu},
 };
 
@@ -28,7 +27,7 @@ fn init_sys() {
     esp_idf_svc::sys::link_patches();
 }
 
-fn main() -> Result<(), EspError> {
+fn main() -> WraithResult<()> {
     log::info!("Starting Wraith Probe");
     init_sys();
 
